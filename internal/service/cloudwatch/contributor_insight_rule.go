@@ -47,10 +47,6 @@ type resourceContributorInsightRule struct {
 	framework.ResourceWithConfigure
 }
 
-func (r *resourceContributorInsightRule) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = "aws_cloudwatch_contributor_insight_rule"
-}
-
 func (r *resourceContributorInsightRule) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
@@ -80,18 +76,18 @@ func (r *resourceContributorInsightRule) Create(ctx context.Context, req resourc
 		return
 	}
 
-	in := &cloudwatch.PutInsightRuleInput{
+	input := cloudwatch.PutInsightRuleInput{
 		RuleDefinition: plan.RuleDefinition.ValueStringPointer(),
 		RuleName:       plan.RuleName.ValueStringPointer(),
 	}
-	resp.Diagnostics.Append(fwflex.Expand(ctx, plan, in)...)
+	resp.Diagnostics.Append(fwflex.Expand(ctx, plan, &input)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	in.Tags = getTagsIn(ctx)
+	input.Tags = getTagsIn(ctx)
 
-	out, err := conn.PutInsightRule(ctx, in)
+	out, err := conn.PutInsightRule(ctx, &input)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			create.ProblemStandardMessage(names.CloudWatch, create.ErrActionCreating, ResNameContributorInsightRule, plan.RuleName.String(), err),
@@ -112,9 +108,10 @@ func (r *resourceContributorInsightRule) Create(ctx context.Context, req resourc
 
 	if !plan.RuleState.IsNull() {
 		if plan.RuleState.ValueEnum() == stateValueEnabled {
-			_, err = conn.EnableInsightRules(ctx, &cloudwatch.EnableInsightRulesInput{
+			input := cloudwatch.EnableInsightRulesInput{
 				RuleNames: []string{plan.RuleName.ValueString()},
-			})
+			}
+			_, err = conn.EnableInsightRules(ctx, &input)
 		}
 
 		if err != nil {
@@ -174,9 +171,10 @@ func (r *resourceContributorInsightRule) Update(ctx context.Context, req resourc
 
 	if !new.RuleState.IsNull() && !old.RuleState.Equal(new.RuleState) {
 		if new.RuleState.ValueEnum() == stateValueEnabled {
-			_, err := conn.EnableInsightRules(ctx, &cloudwatch.EnableInsightRulesInput{
+			input := cloudwatch.EnableInsightRulesInput{
 				RuleNames: []string{new.RuleName.ValueString()},
-			})
+			}
+			_, err := conn.EnableInsightRules(ctx, &input)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					create.ProblemStandardMessage(names.CloudWatch, create.ErrActionUpdating, ResNameContributorInsightRule, new.RuleName.String(), err),
@@ -184,9 +182,10 @@ func (r *resourceContributorInsightRule) Update(ctx context.Context, req resourc
 				)
 			}
 		} else if new.RuleState.ValueEnum() == stateValueDisabled {
-			_, err := conn.DisableInsightRules(ctx, &cloudwatch.DisableInsightRulesInput{
+			input := cloudwatch.DisableInsightRulesInput{
 				RuleNames: []string{new.RuleName.ValueString()},
-			})
+			}
+			_, err := conn.DisableInsightRules(ctx, &input)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					create.ProblemStandardMessage(names.CloudWatch, create.ErrActionUpdating, ResNameContributorInsightRule, new.RuleName.String(), err),
@@ -226,10 +225,6 @@ func (r *resourceContributorInsightRule) Delete(ctx context.Context, req resourc
 
 func (r *resourceContributorInsightRule) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("rule_name"), req, resp)
-}
-
-func (r *resourceContributorInsightRule) ModifyPlan(ctx context.Context, request resource.ModifyPlanRequest, response *resource.ModifyPlanResponse) {
-	r.SetTagsAll(ctx, request, response)
 }
 
 func findContributorInsightRuleByName(ctx context.Context, conn *cloudwatch.Client, name string) (*awstypes.InsightRule, error) {
